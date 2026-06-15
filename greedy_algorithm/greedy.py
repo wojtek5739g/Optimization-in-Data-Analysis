@@ -6,29 +6,38 @@ def facility_location_score(S_indices, sim_matrix):
         return 0.0
     return np.sum(np.max(sim_matrix[:, S_indices], axis=1))
 
+def log_determinant_score(S_indices, sim_matrix, eps=1e-4):
+    """Calculates the value of the Log-Determinant function for subset S."""
+    if not S_indices:
+        return 0.0
+    sub_matrix = sim_matrix[np.ix_(S_indices, S_indices)]
+    sub_matrix = sub_matrix + np.eye(len(S_indices)) * eps
+    return np.log(np.linalg.det(sub_matrix) + eps)
+
+def saturated_coverage_score(S_indices, sim_matrix, alpha=0.1):
+    """Calculates the value of the Saturated Coverage function."""
+    if not S_indices:
+        return 0.0
+    return np.sum(np.minimum(np.sum(sim_matrix[:, S_indices], axis=1), alpha))
+
 def greedy_submodular_maximization(V_size, k, sim_matrix):
     """
     Classical greedy algorithm for submodular function maximization.
+    Returns only the selected subset of indices.
     """
     S_indices = []
-    
     print(f"Starting selection of {k} elements out of {V_size}...")
     
     for step in range(k):
         best_gain = -1
         best_element = None
-        
-        # Current score of our selected subset
         current_score = facility_location_score(S_indices, sim_matrix)
         
-        # Find the element that provides the highest marginal gain
         for v in range(V_size):
             if v in S_indices:
                 continue
                 
-            # Calculate the score for subset S expanded by element v
             gain = facility_location_score(S_indices + [v], sim_matrix) - current_score
-            
             if gain > best_gain:
                 best_gain = gain
                 best_element = v
@@ -38,28 +47,10 @@ def greedy_submodular_maximization(V_size, k, sim_matrix):
         
     return S_indices
 
-def log_determinant_score(S_indices, sim_matrix, eps=1e-4):
-    """Calculates the value of the Log-Determinant submodular function."""
-    if not S_indices:
-        return 0.0
-    # Wycinamy podmacierz korelacji dla wybranych indeksów
-    sub_matrix = sim_matrix[np.ix_(S_indices, S_indices)]
-    reg_matrix = sub_matrix + eps * np.eye(len(S_indices))
-    sign, logdet = np.linalg.slogdet(reg_matrix)
-    return logdet
-
-def saturated_coverage_score(S_indices, sim_matrix, alpha=1.0):
-    """Calculates the value of the Saturated Coverage submodular function."""
-    if not S_indices:
-        return 0.0
-    total_sim_per_row = np.sum(sim_matrix[:, S_indices], axis=1)
-    saturated_sim = np.minimum(total_sim_per_row, alpha)
-    return np.sum(saturated_sim)
-
-def greedy_submodular_maximization_2(V_size, k, score_type, sim_matrix, alpha=1.0):
+def greedy_submodular_maximization_2(V_size, k, sim_matrix, score_type='facility_location', alpha=0.1):
     """
-    Generalized greedy algorithm for submodular function maximization.
-    Returns BOTH the selected feature indices AND the history of marginal gains.
+    Extended greedy selection allowing custom submodular functions.
+    Returns BOTH the selected indices and the history of marginal gains.
     """
     S_indices = []
     marginal_gains = []
@@ -92,8 +83,7 @@ def greedy_submodular_maximization_2(V_size, k, score_type, sim_matrix, alpha=1.
         S_indices.append(best_element)
         marginal_gains.append(best_gain)
         
-        # Wyświetlamy co 10 kroków lub na początku/końcu, żeby nie zaśmiecać konsoli
         if step == 0 or (step + 1) % 10 == 0 or (step + 1) == k:
-            print(f"  Step {step+1}/{k}: Selected feature {best_element}, Marginal Gain: {best_gain:.4f}")
-        
+            print(f"Step {step+1}: Selected element {best_element}, Marginal Gain: {best_gain:.4f}")
+            
     return S_indices, marginal_gains
