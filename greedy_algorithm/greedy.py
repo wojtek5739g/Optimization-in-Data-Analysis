@@ -6,13 +6,13 @@ def facility_location_score(S_indices, sim_matrix):
         return 0.0
     return np.sum(np.max(sim_matrix[:, S_indices], axis=1))
 
-def log_determinant_score(S_indices, sim_matrix, eps=1e-4):
+def log_determinant_score(S_indices, sim_matrix):
     """Calculates the value of the Log-Determinant function for subset S."""
     if not S_indices:
         return 0.0
     sub_matrix = sim_matrix[np.ix_(S_indices, S_indices)]
-    sub_matrix = sub_matrix + np.eye(len(S_indices)) * eps
-    return np.log(np.linalg.det(sub_matrix) + eps)
+    sub_matrix = sub_matrix + np.eye(len(S_indices))
+    return np.log(np.linalg.det(sub_matrix))
 
 def saturated_coverage_score(S_indices, sim_matrix, alpha=0.1):
     """Calculates the value of the Saturated Coverage function."""
@@ -54,6 +54,7 @@ def greedy_submodular_maximization_2(V_size, k, sim_matrix, score_type='facility
     """
     S_indices = []
     marginal_gains = []
+    online_bounds = []
     
     if score_type == 'facility_location':
         score_fn = lambda S: facility_location_score(S, sim_matrix)
@@ -70,20 +71,25 @@ def greedy_submodular_maximization_2(V_size, k, sim_matrix, score_type='facility
         best_gain = -np.inf
         best_element = None
         current_score = score_fn(S_indices)
-        
+        all_remaining_gains = []
+
         for v in range(V_size):
             if v in S_indices:
                 continue
                 
             gain = score_fn(S_indices + [v]) - current_score
+            all_remaining_gains.append(gain)
             if gain > best_gain:
                 best_gain = gain
                 best_element = v
-                
+        
+        all_remaining_gains.sort(reverse=True)
+        step_online_bound = current_score + sum(all_remaining_gains[:k])
+        online_bounds.append(step_online_bound)
+
         S_indices.append(best_element)
         marginal_gains.append(best_gain)
-        
         if step == 0 or (step + 1) % 10 == 0 or (step + 1) == k:
             print(f"Step {step+1}: Selected element {best_element}, Marginal Gain: {best_gain:.4f}")
             
-    return S_indices, marginal_gains
+    return S_indices, marginal_gains, online_bounds
